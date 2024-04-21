@@ -1,0 +1,173 @@
+version: '3'
+
+networks:
+  streaming-network:
+    name: streaming-network
+    driver: bridge
+
+services:
+  zookeeper-1:
+    image: confluentinc/cp-zookeeper
+    container_name: zookeeper-1
+    networks:
+    - streaming-network
+    profiles:
+    - kafka-cluster
+    restart: always
+    environment:
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 3000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_MAX_CLIENT_CNXNS: 25
+      ZOOKEEPER_AUTOPURGE_SNAP_RETAIN_COUNT: 3
+      ZOOKEEPER_AUTOPURGE_PURGE_INTERVAL: 1
+      ZOOKEEPER_SERVERS: zookeeper-1:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
+    ports:
+    - '22181:2181'
+
+  zookeeper-2:
+    image: confluentinc/cp-zookeeper
+    container_name: zookeeper-2
+    networks:
+    - streaming-network
+    profiles:
+    - kafka-cluster
+    restart: always
+    environment:
+      ZOOKEEPER_SERVER_ID: 2
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 3000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_MAX_CLIENT_CNXNS: 25
+      ZOOKEEPER_AUTOPURGE_SNAP_RETAIN_COUNT: 3
+      ZOOKEEPER_AUTOPURGE_PURGE_INTERVAL: 1
+      ZOOKEEPER_SERVERS: zookeeper-1:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
+    ports:
+    - '22182:2181'
+
+  zookeeper-3:
+    image: confluentinc/cp-zookeeper
+    container_name: zookeeper-3
+    networks:
+    - streaming-network
+    profiles:
+    - kafka-cluster
+    restart: always
+    environment:
+      ZOOKEEPER_SERVER_ID: 3
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 3000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_MAX_CLIENT_CNXNS: 25
+      ZOOKEEPER_AUTOPURGE_SNAP_RETAIN_COUNT: 3
+      ZOOKEEPER_AUTOPURGE_PURGE_INTERVAL: 1
+      ZOOKEEPER_SERVERS: zookeeper-1:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
+    ports:
+    - '22183:2181'
+
+  kafka-1:
+    image: confluentinc/cp-kafka
+    container_name: kafka-1
+    depends_on:
+    - zookeeper-1
+    - zookeeper-2
+    - zookeeper-3
+    networks:
+    - streaming-network
+    profiles:
+    - kafka-cluster
+    restart: always
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT_INTERNAL:PLAINTEXT,PLAINTEXT_EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT_INTERNAL://kafka-1:29092,PLAINTEXT_EXTERNAL://kafka-1:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT_INTERNAL://kafka-1:29092,PLAINTEXT_EXTERNAL://localhost:29091
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+    ports:
+    - '29091:9092'
+
+  kafka-2:
+    image: confluentinc/cp-kafka
+    container_name: kafka-2
+    depends_on:
+    - zookeeper-1
+    - zookeeper-2
+    - zookeeper-3
+    networks:
+    - streaming-network
+    profiles:
+    - kafka-cluster
+    restart: always
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT_INTERNAL:PLAINTEXT,PLAINTEXT_EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT_INTERNAL://kafka-2:29092,PLAINTEXT_EXTERNAL://kafka-2:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT_INTERNAL://kafka-2:29092,PLAINTEXT_EXTERNAL://localhost:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+    ports:
+    - '29092:9092'
+
+  kafka-3:
+    image: confluentinc/cp-kafka
+    container_name: kafka-3
+    depends_on:
+    - zookeeper-1
+    - zookeeper-2
+    - zookeeper-3
+    networks:
+    - streaming-network
+    profiles:
+    - kafka-cluster
+    restart: always
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT_INTERNAL:PLAINTEXT,PLAINTEXT_EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT_INTERNAL://kafka-3:29092,PLAINTEXT_EXTERNAL://kafka-3:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT_INTERNAL://kafka-3:29092,PLAINTEXT_EXTERNAL://localhost:29093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+    ports:
+    - '29093:9092'
+
+  job-manager:
+    image: flink:latest
+    ports:
+    - "38081:8081"
+    networks:
+    - streaming-network
+    profiles:
+    - flink-cluster
+    command: jobmanager
+    environment:
+    - |
+      FLINK_PROPERTIES=
+      jobmanager.rpc.address: job-manager
+      jobmanager.memory.process.size: 1024m
+      jobmanager.execution.failover-strategy: full
+
+  task-manager:
+    image: flink:latest
+    depends_on:
+    - job-manager
+    command: taskmanager
+    scale: 2
+    networks:
+    - streaming-network
+    profiles:
+    - flink-cluster
+    environment:
+    - |
+      FLINK_PROPERTIES=
+      jobmanager.rpc.address: job-manager
+      taskmanager.numberOfTaskSlots: 2
+      taskmanager.memory.flink.size: 1024m
+      parallelism.default: 3
+      restart-strategy: fixed-delay
+      restart-strategy.fixed-delay.attempts: 2
+      restart-strategy.fixed-delay.delay: 10s
